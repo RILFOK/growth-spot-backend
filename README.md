@@ -1,39 +1,60 @@
-# Backend
+# Документация проекта growth-spot.ru
 
-Node.js + Express + PostgreSQL backend для проекта growth-spot.ru.
-
-## Стек
-- Node.js
-- Express
-- PostgreSQL
-- JWT
-- PM2
-
-## Основные возможности
-- авторизация и 2FA
-- работа с заявками
-- защита от спама
-- блокировка и whitelist IP
-- управление пользователями
-- настройки сайта
-
-## Запуск локально
-npm install
-node index.js
-
-## Переменные окружения
-Создай .env файл:
-
-DATABASE_URL=postgresql://user:password@localhost:5432/project1
-JWT_SECRET=your_secret
-PORT=3001
+В проекте используется раздельная техническая документация для frontend и backend частей.
 
 ## Production
-Backend в production разворачивается в:
-`/var/www/project1/backend`
+- Сайт: https://growth-spot.ru
+- Админка: https://growth-spot.ru/admin/login
 
-Запуск через PM2:
-pm2 start index.js --name project1-backend
+## Основные документы
+- [Frontend документация](./frontend.md)
+- [Backend документация](./backend.md)
 
-## Healthcheck
-curl http://127.0.0.1:3001/api/health
+## Быстрый старт
+- [Frontend — установка и запуск](./frontend.md#установка-и-запуск)
+- [Backend — установка и запуск](./backend.md#установка-и-запуск)
+
+## Содержание
+
+### Frontend
+Документ `frontend.md` включает:
+- обзор frontend части;
+- установку и запуск;
+- архитектуру;
+- роутинг;
+- описание публичного сайта;
+- описание админ-панели;
+- авторизацию и 2FA;
+- формы и валидацию;
+- SEO и аналитику;
+- интеграцию с API;
+- деплой.
+
+### Backend
+Документ `backend.md` включает:
+- обзор backend части;
+- установку и запуск;
+- архитектуру;
+- API;
+- авторизацию и роли;
+- заявки и антиспам;
+- пользователей;
+- настройки;
+- IP-безопасность;
+- базу данных;
+- деплой.
+
+## Деплой
+В проекте используется единый bash-скрипт деплоя, который:
+- собирает frontend;
+- публикует frontend в production;
+- синхронизирует backend-код;
+- устанавливает production-зависимости backend;
+- перезапускает backend через PM2;
+- проверяет nginx;
+- выполняет health-check backend;
+- проверяет доступность frontend.
+
+Подробности см. в разделах:
+- Frontend — деплой
+- Backend — деплой
