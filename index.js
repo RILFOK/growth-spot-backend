@@ -3,6 +3,7 @@ const cors = require('cors')
 const { Pool } = require('pg')
 const jwt = require('jsonwebtoken')
 const bcrypt = require('bcryptjs')
+const { isFullAccessToken, canEditSettings, PUBLIC_SETTINGS_KEYS } = require('./security/access')
 require('dotenv').config({ quiet: true })
 
 const app = express()
@@ -169,6 +170,11 @@ const authenticateToken = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
 
+    // A temporary 2FA JWT must never authorize normal API requests.
+    if (!isFullAccessToken(decoded)) {
+      return res.status(403).json({ error: 'Требуется завершить вход' })
+    }
+
     const result = await pool.query(
       'SELECT id, email, role, name, nickname, two_factor_enabled, token_version FROM users WHERE id = $1',
       [decoded.id]
@@ -180,11 +186,11 @@ const authenticateToken = async (req, res, next) => {
 
     const dbUser = result.rows[0]
 
-    if (decoded.tokenVersion && decoded.tokenVersion !== dbUser.token_version) {
+    if (decoded.tokenVersion !== dbUser.token_version) {
       return res.status(401).json({ error: 'Сессия устарела. Войдите снова.' })
     }
 
-    if (decoded.role && decoded.role !== dbUser.role) {
+    if (decoded.role !== dbUser.role) {
       return res.status(401).json({ error: 'Роль пользователя изменилась. Войдите снова.' })
     }
 
@@ -196,7 +202,7 @@ const authenticateToken = async (req, res, next) => {
       nickname: dbUser.nickname,
       twoFactorEnabled: dbUser.two_factor_enabled,
       tokenVersion: dbUser.token_version,
-      temp: decoded.temp || false,
+      temp: false,
     }
 
     next()
@@ -1109,7 +1115,11 @@ app.put('/api/users/:id/password', authenticateToken, async (req, res) => {
 // ========================================
 app.get('/api/settings/public', async (req, res) => {
   try {
-    const result = await pool.query('SELECT key, value FROM settings')
+    // Only documented, non-sensitive site settings may be returned anonymously.
+    const result = await pool.query(
+      'SELECT key, value FROM settings WHERE key = ANY($1::text[])',
+      [PUBLIC_SETTINGS_KEYS]
+    )
     const settings = result.rows.reduce((acc, row) => {
       acc[row.key] = row.value
       return acc
@@ -1132,6 +1142,10 @@ app.get('/api/settings', authenticateToken, async (req, res) => {
 })
 
 app.put('/api/settings', authenticateToken, async (req, res) => {
+  if (!canEditSettings(req.user)) {
+    return res.status(403).json({ error: 'Недостаточно прав' })
+  }
+
   const settings = req.body
   if (!settings || typeof settings !== 'object')
     return res.status(400).json({ error: 'Некорректные данные' })
