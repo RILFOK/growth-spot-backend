@@ -298,8 +298,9 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
       return res.status(401).json({ error: 'Токен истёк, войдите снова' })
     }
 
-    if (!decoded.temp)
+    if (!decoded.temp || !Number.isSafeInteger(decoded.tokenVersion) || decoded.role) {
       return res.status(400).json({ error: 'Некорректный токен' })
+    }
 
     // Получаем пользователя и его secret
     const result = await pool.query(
@@ -310,6 +311,15 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
       return res.status(401).json({ error: 'Пользователь не найден' })
 
     const user = result.rows[0]
+
+    // A temporary login becomes invalid after a session reset or when 2FA is disabled.
+    if (
+      decoded.tokenVersion !== user.token_version ||
+      !user.two_factor_enabled ||
+      !user.totp_secret
+    ) {
+      return res.status(401).json({ error: 'Сессия входа устарела. Войдите снова' })
+    }
 
     // Верифицируем TOTP код
     const { TOTP, Secret } = require('otpauth')
@@ -1173,6 +1183,11 @@ app.put('/api/settings', authenticateToken, async (req, res) => {
 const PORT = process.env.PORT || 3001
 const HOST = '127.0.0.1'
 
-app.listen(PORT, HOST, () => {
-  console.log(`Server running on http://${HOST}:${PORT}`)
-})
+// Importing the app for HTTP tests must not bind the production port.
+if (require.main === module) {
+  app.listen(PORT, HOST, () => {
+    console.log(`Server running on http://${HOST}:${PORT}`)
+  })
+}
+
+module.exports = { app, pool }
