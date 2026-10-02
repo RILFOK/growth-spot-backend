@@ -110,6 +110,31 @@ test('HTTP authorization and settings integration (mock database)', async (t) =>
       assert.deepEqual(response.data, { site_name: 'Growth Spot' })
     })
 
+    await t.test('enabling 2FA cannot replace an existing TOTP secret', async () => {
+      const secret = 'JBSWY3DPEHPK3PXP'
+      const code = new TOTP({
+        issuer: 'Точка Роста', algorithm: 'SHA1', digits: 6, period: 30,
+        secret: Secret.fromBase32(secret),
+      }).generate()
+      let attemptedUpdate = false
+      handler = async (sql, params) => {
+        if (/FROM users WHERE id/.test(sql)) return { rows: [authUser('admin')] }
+        if (/UPDATE users SET totp_secret/.test(sql)) {
+          attemptedUpdate = true
+          assert.match(sql, /two_factor_enabled = FALSE RETURNING id/)
+          assert.equal(params[0], secret)
+          return { rows: [] } // Existing 2FA was already enabled.
+        }
+        throw new Error('Unexpected SQL query')
+      }
+      const full = makeToken({ id: 7, email: EMAIL, role: 'admin', tokenVersion: 2 })
+      const response = await request('/api/auth/enable-2fa', {
+        method: 'POST', token: full, body: { secret, code },
+      })
+      assert.equal(response.status, 409)
+      assert.equal(attemptedUpdate, true)
+    })
+
     await t.test('inconsistent 2FA state never issues a full login token', async () => {
       const password = 'local-test-password'
       const user = {
