@@ -4,9 +4,17 @@ const { Pool } = require('pg')
 const jwt = require('jsonwebtoken')
 const bcrypt = require('bcryptjs')
 const { isFullAccessToken, canEditSettings, PUBLIC_SETTINGS_KEYS } = require('./security/access')
+const { createRateLimiter } = require('./security/rate-limit')
 require('dotenv').config({ quiet: true })
 
 const app = express()
+
+// Per-client attempt ceilings. This deployment runs one PM2 backend worker;
+// move counters to a shared store if multiple workers/instances are introduced.
+const loginLimiter = createRateLimiter({ limit: 10, windowMs: 15 * 60 * 1000 })
+const verify2faLimiter = createRateLimiter({ limit: 8, windowMs: 5 * 60 * 1000 })
+const disable2faLimiter = createRateLimiter({ limit: 6, windowMs: 10 * 60 * 1000 })
+
 app.set('trust proxy', 1)
 app.use(cors())
 app.use(express.json())
@@ -221,7 +229,7 @@ app.get('/api/health', (req, res) => {
 // ========================================
 // Авторизация — Шаг 1: email + пароль
 // ========================================
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body
   if (!email || !password)
     return res.status(400).json({ error: 'Email и пароль обязательны' })
@@ -237,7 +245,11 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Неверный email или пароль' })
 
     // Если 2FA включена — возвращаем временный токен
-    if (user.two_factor_enabled && user.totp_secret) {
+    if (user.two_factor_enabled && !user.totp_secret) {
+      return res.status(403).json({ error: 'Двухфакторная авторизация недоступна. Обратитесь к администратору' })
+    }
+
+    if (user.two_factor_enabled) {
       const tempToken = jwt.sign(
         { id: user.id, email: user.email, temp: true, tokenVersion: user.token_version },
         process.env.JWT_SECRET,
@@ -284,9 +296,9 @@ app.post('/api/auth/login', async (req, res) => {
 // ========================================
 // Авторизация — Шаг 2: верификация 2FA
 // ========================================
-app.post('/api/auth/verify-2fa', async (req, res) => {
-  const { code, tempToken } = req.body
-  if (!code || !tempToken)
+app.post('/api/auth/verify-2fa', verify2faLimiter, async (req, res) => {
+  const { code, tempToken } = req.body || {}
+  if (typeof code !== 'string' || !code.trim() || typeof tempToken !== 'string' || !tempToken)
     return res.status(400).json({ error: 'Код и токен обязательны' })
 
   try {
@@ -382,11 +394,14 @@ app.post('/api/auth/enable-2fa', authenticateToken, async (req, res) => {
     if (delta === null)
       return res.status(401).json({ error: 'Неверный код подтверждения' })
 
-    // Сохраняем secret и включаем 2FA
-    await pool.query(
-      'UPDATE users SET totp_secret = $1, two_factor_enabled = TRUE WHERE id = $2',
+    // Atomic update: never overwrite an already enabled 2FA secret.
+    const updated = await pool.query(
+      'UPDATE users SET totp_secret = $1, two_factor_enabled = TRUE WHERE id = $2 AND two_factor_enabled = FALSE RETURNING id',
       [secret, req.user.id]
     )
+    if (updated.rows.length === 0) {
+      return res.status(409).json({ error: '2FA уже включена или пользователь не найден' })
+    }
 
     res.json({ success: true, message: '2FA успешно включена' })
   } catch (err) {
@@ -398,7 +413,7 @@ app.post('/api/auth/enable-2fa', authenticateToken, async (req, res) => {
 // ========================================
 // Отключение 2FA
 // ========================================
-app.post('/api/auth/disable-2fa', authenticateToken, async (req, res) => {
+app.post('/api/auth/disable-2fa', authenticateToken, disable2faLimiter, async (req, res) => {
   const { code } = req.body
   if (!code)
     return res.status(400).json({ error: 'Код обязателен' })

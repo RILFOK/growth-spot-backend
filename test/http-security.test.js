@@ -110,6 +110,24 @@ test('HTTP authorization and settings integration (mock database)', async (t) =>
       assert.deepEqual(response.data, { site_name: 'Growth Spot' })
     })
 
+    await t.test('inconsistent 2FA state never issues a full login token', async () => {
+      const password = 'local-test-password'
+      const user = {
+        ...authUser('admin'),
+        password: await bcrypt.hash(password, 4),
+        totp_secret: null,
+      }
+      handler = async (sql) => {
+        assert.match(sql, /FROM users WHERE email/)
+        return { rows: [user] }
+      }
+      const response = await request('/api/auth/login', {
+        method: 'POST', body: { email: EMAIL, password },
+      })
+      assert.equal(response.status, 403)
+      assert.equal(response.data.token, undefined)
+    })
+
     await t.test('password login -> temporary JWT -> TOTP -> full JWT', async () => {
       const password = 'local-test-password'
       const totpSecret = 'JBSWY3DPEHPK3PXP'
