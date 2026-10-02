@@ -1,60 +1,41 @@
-# Документация проекта growth-spot.ru
+# Growth Spot — Backend
 
-В проекте используется раздельная техническая документация для frontend и backend частей.
+A REST API for the standalone React/Vite iteration of Growth Spot. Built with Node.js, Express 5 and PostgreSQL. The current live website may use a different application iteration.
 
-## Production
-- Сайт: https://growth-spot.ru
-- Админка: https://growth-spot.ru/admin/login
+## Stack
+Node.js · Express 5 · PostgreSQL (`pg`) · JWT · bcrypt/bcryptjs · OTPAuth · PM2.
 
-## Основные документы
-- [Frontend документация](./frontend.md)
-- [Backend документация](./backend.md)
+## Implemented areas
+- API for website forms and the administrative interface.
+- Lead management with antispam checks.
+- Users, roles and access control.
+- JWT authentication and two-factor authentication.
+- Site settings, IP allowlist/blocklist and health check.
 
-## Быстрый старт
-- [Frontend — установка и запуск](./frontend.md#установка-и-запуск)
-- [Backend — установка и запуск](./backend.md#установка-и-запуск)
+## Local development
+Requirements: Node.js, npm and a running PostgreSQL instance.
 
-## Содержание
+```bash
+npm ci
+cp .env.example .env
+# Set DATABASE_URL, JWT_SECRET and other required values
+node index.js
+```
 
-### Frontend
-Документ `frontend.md` включает:
-- обзор frontend части;
-- установку и запуск;
-- архитектуру;
-- роутинг;
-- описание публичного сайта;
-- описание админ-панели;
-- авторизацию и 2FA;
-- формы и валидацию;
-- SEO и аналитику;
-- интеграцию с API;
-- деплой.
+The setup documentation describes the development configuration and health endpoint. Do not commit real credentials or production data.
 
-### Backend
-Документ `backend.md` включает:
-- обзор backend части;
-- установку и запуск;
-- архитектуру;
-- API;
-- авторизацию и роли;
-- заявки и антиспам;
-- пользователей;
-- настройки;
-- IP-безопасность;
-- базу данных;
-- деплой.
+## Documentation
+- [Overview](docs/backend/overview.md)
+- [Local setup](docs/backend/setup.md)
+- [Architecture](docs/backend/architecture.md)
+- [API](docs/backend/api.md)
+- [Authentication and roles](docs/backend/auth-and-roles.md)
+- [Leads and antispam](docs/backend/leads-and-antispam.md)
+- [Database](docs/backend/database.md)
+- [IP security](docs/backend/ip-security.md)
+- [Deployment](docs/backend/deployment.md)
 
-## Деплой
-В проекте используется единый bash-скрипт деплоя, который:
-- собирает frontend;
-- публикует frontend в production;
-- синхронизирует backend-код;
-- устанавливает production-зависимости backend;
-- перезапускает backend через PM2;
-- проверяет nginx;
-- выполняет health-check backend;
-- проверяет доступность frontend.
+## Related project
+[Growth Spot — Frontend](https://github.com/RILFOK/growth-spot-frontend) — React, TypeScript, Vite and Tailwind CSS.
 
-Подробности см. в разделах:
-- Frontend — деплой
-- Backend — деплой
+> This repository documents and demonstrates an application implementation. It does not include production secrets or a live administrative account.
